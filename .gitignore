@@ -1,0 +1,5 @@
+﻿venv/
+dataset/
+*.keras
+__pycache__/
+.streamlit/secrets.toml
