@@ -1,10 +1,8 @@
 import base64
 import io
 import os
-import time
-from google import genai
-from PIL import Image
 import requests
+from PIL import Image
 import streamlit as st
 
 st.set_page_config(
@@ -73,51 +71,47 @@ if image_file is not None:
   ):
     if not api_key:
       st.error(
-          "API Key missing. Please make sure GEMINI_API_KEY is configured in"
+          "API Key missing. Please ensure GEMINI_API_KEY is configured in"
           " Streamlit Secrets."
       )
     else:
       with st.spinner("Analyzing plant pathology and generating treatment..."):
-        prompt = (
-            "You are a senior agricultural specialist and crop pathologist.\n"
-            "Examine this plant leaf carefully and output your report in the"
-            " exact format below:\n\n"
-            "### 1. 🌾 Crop Identification\n"
-            "- **Crop / Plant Name:** [Common name and botanical name]\n\n"
-            "### 2. 🩺 Health Status\n"
-            "- **Condition:** [State clearly: 'HEALTHY' or 'DISEASED']\n"
-            "- **Confidence Assessment:** [High / Moderate / Low]\n\n"
-            "### 3. 🔬 Disease Diagnosis (If Diseased)\n"
-            "- **Disease / Pest Name:** [Exact pathology name, or 'None - plant"
-            " is healthy']\n"
-            "- **Severity Level:** [Mild / Moderate / Severe / Not"
-            " Applicable]\n"
-            "- **Observed Symptoms:** [Detail chlorosis, fungal lesions,"
-            " wilting, or pest damage]\n\n"
-            "### 4. 💊 Chemical & Pesticide Recommendations\n"
-            "- **Recommended Pesticide / Fungicide:** [Exact chemical names,"
-            " e.g., Mancozeb, Chlorpyrifos, Carbendazim, Copper Oxychloride]\n"
-            "- **Dosage & Application:** [Standard dilution in ml/g per liter"
-            " of water and spraying interval]\n\n"
-            "### 5. 🌿 Organic / Natural Recovery Methods\n"
-            "- **Organic Treatment:** [Neem oil, bio-control agents like"
-            " Trichoderma, wood ash dusting]\n"
-            "- **Cultural Practices:** [Pruning diseased leaves, drip"
-            " management, soil aeration]\n\n"
-            "### 6. 🛡️ Preventive Action for Farmers\n"
-            "- [Crop rotation, seed treatment, and resistant variety"
-            " recommendations]\n\n"
-            "If the image is not a plant or leaf, state clearly that a valid"
-            " plant leaf image is required."
-        )
-
-        result_text = None
-        error_logs = []
-
-        # Strategy 1: Direct Vertex AI REST Endpoint
         buffered = io.BytesIO()
         img.save(buffered, format="JPEG", quality=85)
         img_b64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
+
+        prompt = (
+            "You are an expert crop doctor, agronomist, and plant"
+            " pathologist.\nCarefully analyze this leaf image and generate a"
+            " comprehensive report in the exact format below:\n\n### 1. 🌾 Crop"
+            " Identification\n- **Crop / Plant Name:** [Identify the exact"
+            " crop, e.g., Wheat, Maize, Tomato, Cotton, Rice, etc., with"
+            " botanical name]\n- **Part Inspected:** [Leaf, stem, or"
+            " fruit]\n\n### 2. 🩺 Health Status\n- **Condition:** [State"
+            " clearly in bold: **HEALTHY** or **DISEASED**]\n- **Confidence"
+            " Level:** [High / Moderate / Low]\n\n### 3. 🔬 Disease Diagnosis"
+            " (If Diseased)\n- **Disease or Pest Name:** [Exact pathology name,"
+            " e.g., Early Blight, Powdery Mildew, Leaf Rust, Stem Borer, or"
+            " 'None - Plant is Healthy']\n- **Severity Level:** [Mild /"
+            " Moderate / Severe / None]\n- **Observed Symptoms:** [Detail"
+            " specific leaf damage, spots, chlorosis, fungal patches, or insect"
+            " feeding marks]\n\n### 4. 💊 Chemical Pesticide & Fungicide"
+            " Treatment (To Restore Crop Health)\n- **Recommended Chemical:**"
+            " [Specific chemical name, e.g., Mancozeb, Chlorpyrifos,"
+            " Carbendazim, Copper Oxychloride, Azoxystrobin, or 'None"
+            " needed']\n- **Exact Dosage:** [Dosage in ml or grams per 1 Liter"
+            " of water]\n- **Application Schedule:** [Spray intervals, e.g.,"
+            " spray once early morning, repeat after 10-12 days if needed]\n\n###"
+            " 5. 🌿 Organic & Natural Remedies\n- **Organic Formulation:**"
+            " [Neem oil spray (5ml/L), Trichoderma viride bio-fungicide, or"
+            " fermented buttermilk spray]\n- **Cultural Field Practices:**"
+            " [Prune and burn infected leaves, improve furrow drainage, reduce"
+            " overhead watering]\n\n### 6. 🛡️ Preventive Measures for"
+            " Farmers\n- [Seed treatment before sowing, crop rotation with"
+            " non-host crops, and use of disease-resistant varieties]\n\nIf the"
+            " uploaded image is not a plant or leaf, state clearly that a valid"
+            " plant leaf photo is required."
+        )
 
         payload = {
             "contents": [{
@@ -134,42 +128,52 @@ if image_file is not None:
             }]
         }
 
-        vertex_url = f"https://aiplatform.googleapis.com/v1beta1/projects/crop-doctor-512410/locations/us-central1/publishers/google/models/gemini-2.0-flash:generateContent?key={api_key}"
-        try:
-          resp = requests.post(
-              vertex_url,
-              json=payload,
-              headers={"Content-Type": "application/json"},
-              timeout=25,
-          )
-          if resp.status_code == 200:
-            data = resp.json()
-            result_text = data["candidates"][0]["content"]["parts"][0]["text"]
-          else:
-            error_logs.append(f"Vertex REST ({resp.status_code}): {resp.text}")
-        except Exception as e:
-          error_logs.append(f"Vertex REST exception: {str(e)}")
+        # Targeted endpoint list configured for Project 434503069010 and AQ Auth Keys
+        project_num = "434503069010"
+        endpoints_to_try = [
+            # 1. Google Cloud Vertex AI Express endpoint for Project 434503069010
+            (
+                f"https://us-central1-aiplatform.googleapis.com/v1beta1/projects/{project_num}/locations/us-central1/publishers/google/models/gemini-2.0-flash:generateContent",
+                {"Authorization": f"Bearer {api_key}"},
+            ),
+            (
+                f"https://us-central1-aiplatform.googleapis.com/v1beta1/projects/{project_num}/locations/us-central1/publishers/google/models/gemini-1.5-flash:generateContent",
+                {"Authorization": f"Bearer {api_key}"},
+            ),
+            # 2. Direct x-goog-api-key on project endpoint
+            (
+                f"https://us-central1-aiplatform.googleapis.com/v1beta1/projects/{project_num}/locations/us-central1/publishers/google/models/gemini-2.0-flash:generateContent",
+                {"x-goog-api-key": api_key},
+            ),
+            # 3. Direct Gemini Developer API with Bearer token
+            (
+                "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
+                {"Authorization": f"Bearer {api_key}"},
+            ),
+        ]
 
-        # Strategy 2: Google GenAI Client
-        if not result_text:
-          for model_name in ["gemini-2.5-flash", "gemini-2.0-flash"]:
-            try:
-              client = genai.Client(api_key=api_key)
-              response = client.models.generate_content(
-                  model=model_name, contents=[img, prompt]
-              )
-              if response and response.text:
-                result_text = response.text
-                break
-            except Exception as e:
-              error_logs.append(f"SDK ({model_name}): {str(e)}")
-              time.sleep(0.5)
+        result_text = None
+        error_logs = []
+
+        for url, auth_hdr in endpoints_to_try:
+          headers = {"Content-Type": "application/json"}
+          headers.update(auth_hdr)
+          try:
+            resp = requests.post(url, json=payload, headers=headers, timeout=30)
+            if resp.status_code == 200:
+              data = resp.json()
+              result_text = data["candidates"][0]["content"]["parts"][0]["text"]
+              break
+            else:
+              error_logs.append(f"{resp.status_code}: {resp.text}")
+          except Exception as e:
+            error_logs.append(str(e))
 
         if result_text:
           st.success("✅ Diagnosis Complete!")
           st.markdown(result_text)
         else:
-          st.error("Diagnostic failure details:")
+          st.error("Diagnosis service response details:")
           for err in error_logs:
             st.code(err)
 
