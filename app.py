@@ -1,6 +1,7 @@
+import base64
+import io
 import os
-import time
-from google import genai
+import requests
 from PIL import Image
 import streamlit as st
 
@@ -35,27 +36,18 @@ st.write(
     " actionable remedies."
 )
 
-# Secure API Key Retrieval
-api_key = None
+# Fetch Secret Safely
+api_key = ""
 try:
   if "GEMINI_API_KEY" in st.secrets:
-    api_key = st.secrets["GEMINI_API_KEY"]
+    api_key = str(st.secrets["GEMINI_API_KEY"]).strip()
 except Exception:
   pass
 
 if not api_key:
-  api_key = os.environ.get("GEMINI_API_KEY", "")
+  api_key = os.environ.get("GEMINI_API_KEY", "").strip()
 
-if not api_key:
-  st.error(
-      "Missing GEMINI_API_KEY in Streamlit Secrets! Please add your key in"
-      " Streamlit Cloud Settings > Secrets."
-  )
-  st.stop()
-
-client = genai.Client(api_key=api_key)
-
-# Input method selection
+# Input Options
 option = st.radio(
     "Choose Input Method:",
     ("📁 Upload Leaf Image", "📷 Live Camera Capture"),
@@ -71,67 +63,124 @@ else:
   image_file = st.camera_input("Capture leaf via camera")
 
 if image_file is not None:
-  img = Image.open(image_file)
+  img = Image.open(image_file).convert("RGB")
   st.image(img, caption="Target Crop Leaf", use_container_width=True)
 
   if st.button(
       "🔍 Diagnose Crop Health", type="primary", use_container_width=True
   ):
-    with st.spinner("Analyzing plant pathology and generating treatment..."):
-      prompt = (
-          "You are a senior agricultural specialist and crop pathologist.\n"
-          "Examine this plant image carefully and output your report in the"
-          " exact format below:\n\n"
-          "### 1. 🌾 Crop Identification\n"
-          "- **Crop / Plant Name:** [Common name and botanical name]\n\n"
-          "### 2. 🩺 Health Status\n"
-          "- **Condition:** [State clearly: 'HEALTHY' or 'DISEASED']\n"
-          "- **Confidence Assessment:** [High / Moderate / Low]\n\n"
-          "### 3. 🔬 Disease Diagnosis (If Diseased)\n"
-          "- **Disease / Pest Name:** [Exact pathology name, or 'None - plant is"
-          " healthy']\n"
-          "- **Severity Level:** [Mild / Moderate / Severe / Not Applicable]\n"
-          "- **Observed Symptoms:** [Detail chlorosis, fungal lesions,"
-          " wilting, or pest damage]\n\n"
-          "### 4. 💊 Chemical & Pesticide Recommendations\n"
-          "- **Recommended Pesticide / Fungicide:** [Exact chemical names, e.g.,"
-          " Mancozeb, Chlorpyrifos, Carbendazim, Copper Oxychloride]\n"
-          "- **Dosage & Application:** [Standard dilution in ml/g per liter of"
-          " water and spraying interval]\n\n"
-          "### 5. 🌿 Organic / Natural Recovery Methods\n"
-          "- **Organic Treatment:** [Neem oil, bio-control agents like"
-          " Trichoderma, wood ash dusting]\n"
-          "- **Cultural Practices:** [Pruning diseased leaves, drip management,"
-          " soil aeration]\n\n"
-          "### 6. 🛡️ Preventive Action for Farmers\n"
-          "- [Crop rotation, seed treatment, and resistant variety"
-          " recommendations]\n\n"
-          "If the image is not a plant or leaf, state clearly that a valid"
-          " plant leaf image is required."
+    if not api_key:
+      st.error(
+          "API Key missing. Please make sure GEMINI_API_KEY is configured in"
+          " Streamlit Secrets."
       )
+    else:
+      with st.spinner("Analyzing plant pathology and generating treatment..."):
+        buffered = io.BytesIO()
+        img.save(buffered, format="JPEG", quality=85)
+        img_b64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
 
-      # High-availability production models
-      models_to_try = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]
-      result_text = None
-      last_err = ""
+        prompt = (
+            "You are a senior agricultural specialist and crop pathologist.\n"
+            "Examine this plant leaf carefully and output your report in the"
+            " exact format below:\n\n"
+            "### 1. 🌾 Crop Identification\n"
+            "- **Crop / Plant Name:** [Common name and botanical name]\n\n"
+            "### 2. 🩺 Health Status\n"
+            "- **Condition:** [State clearly: 'HEALTHY' or 'DISEASED']\n"
+            "- **Confidence Assessment:** [High / Moderate / Low]\n\n"
+            "### 3. 🔬 Disease Diagnosis (If Diseased)\n"
+            "- **Disease / Pest Name:** [Exact pathology name, or 'None - plant"
+            " is healthy']\n"
+            "- **Severity Level:** [Mild / Moderate / Severe / Not"
+            " Applicable]\n"
+            "- **Observed Symptoms:** [Detail chlorosis, fungal lesions,"
+            " wilting, or pest damage]\n\n"
+            "### 4. 💊 Chemical & Pesticide Recommendations\n"
+            "- **Recommended Pesticide / Fungicide:** [Exact chemical names,"
+            " e.g., Mancozeb, Chlorpyrifos, Carbendazim, Copper Oxychloride]\n"
+            "- **Dosage & Application:** [Standard dilution in ml/g per liter"
+            " of water and spraying interval]\n\n"
+            "### 5. 🌿 Organic / Natural Recovery Methods\n"
+            "- **Organic Treatment:** [Neem oil, bio-control agents like"
+            " Trichoderma, wood ash dusting]\n"
+            "- **Cultural Practices:** [Pruning diseased leaves, drip"
+            " management, soil aeration]\n\n"
+            "### 6. 🛡️ Preventive Action for Farmers\n"
+            "- [Crop rotation, seed treatment, and resistant variety"
+            " recommendations]\n\n"
+            "If the image is not a plant or leaf, state clearly that a valid"
+            " plant leaf image is required."
+        )
 
-      for model_name in models_to_try:
-        try:
-          response = client.models.generate_content(
-              model=model_name, contents=[img, prompt]
+        payload = {
+            "contents": [{
+                "role": "user",
+                "parts": [
+                    {"text": prompt},
+                    {
+                        "inline_data": {
+                            "mime_type": "image/jpeg",
+                            "data": img_b64,
+                        }
+                    },
+                ],
+            }]
+        }
+
+        # Multi-gateway routing: Google Cloud Vertex Gemini endpoint first, then standard endpoints
+        endpoints = [
+            # Google Cloud Express Vertex API (matches account-bound keys for crop-doctor-512410)
+            (
+                "https://aiplatform.googleapis.com/v1beta1/projects/crop-doctor-512410/locations/us-central1/publishers/google/models/gemini-2.0-flash:generateContent",
+                "param",
+            ),
+            (
+                "https://aiplatform.googleapis.com/v1beta1/projects/crop-doctor-512410/locations/us-central1/publishers/google/models/gemini-1.5-flash:generateContent",
+                "param",
+            ),
+            # Standard Fallback Endpoints
+            (
+                "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+                "param",
+            ),
+            (
+                "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
+                "param",
+            ),
+            (
+                "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent",
+                "param",
+            ),
+        ]
+
+        result_text = None
+        last_error = ""
+
+        for base_url, method in endpoints:
+          try:
+            url = f"{base_url}?key={api_key}"
+            headers = {
+                "Content-Type": "application/json",
+                "x-goog-api-key": api_key,
+            }
+            resp = requests.post(url, json=payload, headers=headers, timeout=30)
+            if resp.status_code == 200:
+              data = resp.json()
+              result_text = data["candidates"][0]["content"]["parts"][0]["text"]
+              break
+            else:
+              last_error = f"{resp.status_code}: {resp.text}"
+          except Exception as e:
+            last_error = str(e)
+
+        if result_text:
+          st.success("✅ Diagnosis Complete!")
+          st.markdown(result_text)
+        else:
+          st.error(
+              f"Could not connect to service. Gateway response: {last_error}"
           )
-          if response and response.text:
-            result_text = response.text
-            break
-        except Exception as e:
-          last_err = str(e)
-          time.sleep(1.0)
-
-      if result_text:
-        st.success("✅ Diagnosis Complete!")
-        st.markdown(result_text)
-      else:
-        st.error(f"Diagnosis request failed. Error detail: {last_err}")
 
 # Bottom corner branding
 st.markdown("---")
