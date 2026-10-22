@@ -1,8 +1,8 @@
 import base64
 import io
 import os
-import requests
 from PIL import Image
+import requests
 import streamlit as st
 
 st.set_page_config(
@@ -71,7 +71,7 @@ if image_file is not None:
   ):
     if not api_key:
       st.error(
-          "API Key missing. Please ensure GEMINI_API_KEY is configured in"
+          "API Key missing. Please make sure GEMINI_API_KEY is configured in"
           " Streamlit Secrets."
       )
     else:
@@ -81,36 +81,45 @@ if image_file is not None:
         img_b64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
 
         prompt = (
-            "You are an expert crop doctor, agronomist, and plant"
-            " pathologist.\nCarefully analyze this leaf image and generate a"
-            " comprehensive report in the exact format below:\n\n### 1. 🌾 Crop"
-            " Identification\n- **Crop / Plant Name:** [Identify the exact"
-            " crop, e.g., Wheat, Maize, Tomato, Cotton, Rice, etc., with"
-            " botanical name]\n- **Part Inspected:** [Leaf, stem, or"
-            " fruit]\n\n### 2. 🩺 Health Status\n- **Condition:** [State"
-            " clearly in bold: **HEALTHY** or **DISEASED**]\n- **Confidence"
-            " Level:** [High / Moderate / Low]\n\n### 3. 🔬 Disease Diagnosis"
-            " (If Diseased)\n- **Disease or Pest Name:** [Exact pathology name,"
-            " e.g., Early Blight, Powdery Mildew, Leaf Rust, Stem Borer, or"
-            " 'None - Plant is Healthy']\n- **Severity Level:** [Mild /"
-            " Moderate / Severe / None]\n- **Observed Symptoms:** [Detail"
-            " specific leaf damage, spots, chlorosis, fungal patches, or insect"
-            " feeding marks]\n\n### 4. 💊 Chemical Pesticide & Fungicide"
-            " Treatment (To Restore Crop Health)\n- **Recommended Chemical:**"
-            " [Specific chemical name, e.g., Mancozeb, Chlorpyrifos,"
-            " Carbendazim, Copper Oxychloride, Azoxystrobin, or 'None"
-            " needed']\n- **Exact Dosage:** [Dosage in ml or grams per 1 Liter"
-            " of water]\n- **Application Schedule:** [Spray intervals, e.g.,"
-            " spray once early morning, repeat after 10-12 days if needed]\n\n###"
-            " 5. 🌿 Organic & Natural Remedies\n- **Organic Formulation:**"
-            " [Neem oil spray (5ml/L), Trichoderma viride bio-fungicide, or"
-            " fermented buttermilk spray]\n- **Cultural Field Practices:**"
-            " [Prune and burn infected leaves, improve furrow drainage, reduce"
-            " overhead watering]\n\n### 6. 🛡️ Preventive Measures for"
-            " Farmers\n- [Seed treatment before sowing, crop rotation with"
-            " non-host crops, and use of disease-resistant varieties]\n\nIf the"
-            " uploaded image is not a plant or leaf, state clearly that a valid"
-            " plant leaf photo is required."
+            "You are an expert crop pathologist and agronomy specialist.\n"
+            "Examine this crop leaf image carefully and provide an actionable"
+            " diagnosis report for farmers in the exact structure below:\n\n"
+            "### 1. 🌾 Crop Identification\n"
+            "- **Crop Name:** [Common name, e.g., Wheat, Maize, Tomato, Cotton,"
+            " Rice, etc., and botanical name]\n"
+            "- **Plant Part Analyzed:** [Leaf blade, veins, petiole, stem]\n\n"
+            "### 2. 🩺 Health Status\n"
+            "- **Status:** [State strictly in bold: **HEALTHY** or"
+            " **DISEASED**]\n"
+            "- **Confidence Score:** [High / Moderate / Low]\n\n"
+            "### 3. 🔬 Disease Diagnosis (If Diseased)\n"
+            "- **Pathology / Pest Name:** [Exact pathogen name, e.g., Early"
+            " Blight, Rust, Downy Mildew, Leaf Spot, or 'None - Crop is"
+            " Healthy']\n"
+            "- **Severity Level:** [Mild / Moderate / Severe / Not"
+            " Applicable]\n"
+            "- **Observed Symptoms:** [Detail chlorosis, necrotic lesions,"
+            " fungal spores, curling, or insect damage]\n\n"
+            "### 4. 💊 Chemical Pesticide & Fungicide Recommendations (To Cure"
+            " Disease)\n"
+            "- **Recommended Chemical:** [Standard commercial formulations"
+            " like Mancozeb 75% WP, Carbendazim 50% WP, Chlorpyrifos 20% EC,"
+            " Copper Oxychloride, or 'None required']\n"
+            "- **Standard Dosage:** [Exact dosage per 1 liter of water and per"
+            " acre spray tank]\n"
+            "- **Spraying Schedule:** [Time of spray (early morning/dusk) and"
+            " repeat interval in days]\n\n"
+            "### 5. 🌿 Organic & Natural Treatment\n"
+            "- **Bio-Pesticide / Natural Remedy:** [Neem oil spray (5ml/L),"
+            " Trichoderma viride, fermented buttermilk spray, or bio-fungicide"
+            " application]\n"
+            "- **Agronomic Management:** [Infected foliage removal, drip"
+            " adjustment, aeration between rows]\n\n"
+            "### 6. 🛡️ Long-Term Preventive Practices\n"
+            "- [Seed treatment protocols, crop rotation, soil health"
+            " improvement, and disease-resistant cultivars]\n\n"
+            "If the provided image is not a plant leaf, state clearly that a"
+            " valid agricultural leaf photo must be provided."
         )
 
         payload = {
@@ -128,38 +137,19 @@ if image_file is not None:
             }]
         }
 
-        # Targeted endpoint list configured for Project 434503069010 and AQ Auth Keys
         project_num = "434503069010"
-        endpoints_to_try = [
-            # 1. Google Cloud Vertex AI Express endpoint for Project 434503069010
-            (
-                f"https://us-central1-aiplatform.googleapis.com/v1beta1/projects/{project_num}/locations/us-central1/publishers/google/models/gemini-2.0-flash:generateContent",
-                {"Authorization": f"Bearer {api_key}"},
-            ),
-            (
-                f"https://us-central1-aiplatform.googleapis.com/v1beta1/projects/{project_num}/locations/us-central1/publishers/google/models/gemini-1.5-flash:generateContent",
-                {"Authorization": f"Bearer {api_key}"},
-            ),
-            # 2. Direct x-goog-api-key on project endpoint
-            (
-                f"https://us-central1-aiplatform.googleapis.com/v1beta1/projects/{project_num}/locations/us-central1/publishers/google/models/gemini-2.0-flash:generateContent",
-                {"x-goog-api-key": api_key},
-            ),
-            # 3. Direct Gemini Developer API with Bearer token
-            (
-                "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
-                {"Authorization": f"Bearer {api_key}"},
-            ),
-        ]
-
+        models_to_try = ["gemini-2.0-flash", "gemini-1.5-flash"]
         result_text = None
         error_logs = []
 
-        for url, auth_hdr in endpoints_to_try:
-          headers = {"Content-Type": "application/json"}
-          headers.update(auth_hdr)
+        for model_name in models_to_try:
+          url = f"https://us-central1-aiplatform.googleapis.com/v1beta1/projects/{project_num}/locations/us-central1/publishers/google/models/{model_name}:generateContent"
+          headers = {
+              "Content-Type": "application/json",
+              "x-goog-api-key": api_key,
+          }
           try:
-            resp = requests.post(url, json=payload, headers=headers, timeout=30)
+            resp = requests.post(url, json=payload, headers=headers, timeout=35)
             if resp.status_code == 200:
               data = resp.json()
               result_text = data["candidates"][0]["content"]["parts"][0]["text"]
