@@ -10,23 +10,23 @@ st.set_page_config(
     page_icon="🌱",
 )
 
-# Professional Developer Badge in the Sidebar
+# Sidebar Developer Card
 with st.sidebar:
   st.markdown("### 👨‍💻 Project Developer")
   st.markdown(
       """
     <div style="background-color: #f0fdf4; border-left: 4px solid #16a34a; padding: 12px; border-radius: 6px;">
         <p style="margin: 0; color: #15803d; font-weight: bold; font-size: 15px;">Developed by Ganesh</p>
-        <p style="margin: 4px 0 0 0; color: #4b5563; font-size: 13px;">Agronomy & Smart Crop Protection System</p>
+        <p style="margin: 4px 0 0 0; color: #4b5563; font-size: 13px;">Agronomy & Smart Crop Protection</p>
     </div>
     """,
       unsafe_allow_html=True,
   )
   st.markdown("---")
   st.markdown(
-      "**About this App:**\nAdvanced plant pathology system to identify crops,"
-      " detect diseases from leaf symptoms, and recommend targeted chemical &"
-      " organic treatments."
+      "**About this App:**\nPlant pathology diagnostic system to identify"
+      " crops, detect diseases from leaf photos, and recommend targeted"
+      " treatments."
   )
 
 st.title("🌱 Crop Factor: Plant Disease Doctor")
@@ -35,7 +35,7 @@ st.write(
     " actionable remedies."
 )
 
-# Secure Key Retrieval
+# Secure API Key Retrieval
 api_key = None
 try:
   if "GEMINI_API_KEY" in st.secrets:
@@ -48,14 +48,14 @@ if not api_key:
 
 if not api_key:
   st.error(
-      "Missing GEMINI_API_KEY! Please configure it in .streamlit/secrets.toml or"
-      " Streamlit Cloud Secrets."
+      "Missing GEMINI_API_KEY in Streamlit Secrets! Please add your key in"
+      " Streamlit Cloud Settings > Secrets."
   )
   st.stop()
 
 client = genai.Client(api_key=api_key)
 
-# Flexible image capture for Mobile & Laptop
+# Input method selection
 option = st.radio(
     "Choose Input Method:",
     ("📁 Upload Leaf Image", "📷 Live Camera Capture"),
@@ -79,10 +79,9 @@ if image_file is not None:
   ):
     with st.spinner("Analyzing plant pathology and generating treatment..."):
       prompt = (
-          "You are a senior agricultural extension specialist and crop"
-          " pathologist.\n"
-          "Examine the provided plant image carefully and output the"
-          " evaluation using the following structure:\n\n"
+          "You are a senior agricultural specialist and crop pathologist.\n"
+          "Examine this plant image carefully and output your report in the"
+          " exact format below:\n\n"
           "### 1. 🌾 Crop Identification\n"
           "- **Crop / Plant Name:** [Common name and botanical name]\n\n"
           "### 2. 🩺 Health Status\n"
@@ -91,58 +90,50 @@ if image_file is not None:
           "### 3. 🔬 Disease Diagnosis (If Diseased)\n"
           "- **Disease / Pest Name:** [Exact pathology name, or 'None - plant is"
           " healthy']\n"
-          "- **Severity Level:** [Mild / Moderate / Severe]\n"
-          "- **Observed Symptoms:** [Detail discoloration, chlorosis, fungal"
-          " pustules, necrosis, or pest bites]\n\n"
+          "- **Severity Level:** [Mild / Moderate / Severe / Not Applicable]\n"
+          "- **Observed Symptoms:** [Detail chlorosis, fungal lesions,"
+          " wilting, or pest damage]\n\n"
           "### 4. 💊 Chemical & Pesticide Recommendations\n"
-          "- **Recommended Pesticide / Fungicide:** [Specific chemical active"
-          " ingredients, e.g., Mancozeb, Chlorpyrifos, Carbendazim, Copper"
-          " Oxychloride, Azoxystrobin]\n"
+          "- **Recommended Pesticide / Fungicide:** [Exact chemical names, e.g.,"
+          " Mancozeb, Chlorpyrifos, Carbendazim, Copper Oxychloride]\n"
           "- **Dosage & Application:** [Standard dilution in ml/g per liter of"
           " water and spraying interval]\n\n"
           "### 5. 🌿 Organic / Natural Recovery Methods\n"
-          "- **Organic Spray:** [Neem kernel extract / neem oil, bio-control"
-          " agents like Trichoderma viride or Pseudomonas fluorescens]\n"
-          "- **Cultural Practices:** [Soil drainage, pruning diseased leaves,"
-          " balanced NPK fertilization]\n\n"
+          "- **Organic Treatment:** [Neem oil, bio-control agents like"
+          " Trichoderma, wood ash dusting]\n"
+          "- **Cultural Practices:** [Pruning diseased leaves, drip management,"
+          " soil aeration]\n\n"
           "### 6. 🛡️ Preventive Action for Farmers\n"
           "- [Crop rotation, seed treatment, and resistant variety"
           " recommendations]\n\n"
-          "If the image is not a plant or leaf, state clearly that a plant leaf"
-          " photo is required."
+          "If the image is not a plant or leaf, state clearly that a valid"
+          " plant leaf image is required."
       )
 
-      models_to_try = [
-          "gemini-flash-latest",
-          "gemini-3.8-flash",
-          "gemini-3.5-flash",
-          "gemini-3-flash",
-      ]
+      # High-availability production models
+      models_to_try = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]
       result_text = None
-      error_log = []
+      last_err = ""
 
-      for model in models_to_try:
+      for model_name in models_to_try:
         try:
           response = client.models.generate_content(
-              model=model, contents=[img, prompt]
+              model=model_name, contents=[img, prompt]
           )
           if response and response.text:
             result_text = response.text
             break
-        except Exception as err:
-          error_log.append(f"{model}: {str(err)}")
+        except Exception as e:
+          last_err = str(e)
           time.sleep(1.0)
 
       if result_text:
         st.success("✅ Diagnosis Complete!")
         st.markdown(result_text)
       else:
-        st.error(
-            "Diagnostic service temporarily busy. Please click 'Diagnose Crop"
-            " Health' again."
-        )
+        st.error(f"Diagnosis request failed. Error detail: {last_err}")
 
-# Bottom Corner Footer
+# Bottom corner branding
 st.markdown("---")
 st.markdown(
     """
