@@ -1,124 +1,120 @@
-import json
+import os
 import time
+from google import genai
 from PIL import Image
 import streamlit as st
-import google.generativeai as genai
 
-st.set_page_config(page_title="Crop Factor", page_icon="🌾", layout="centered")
+st.set_page_config(
+    page_title="Crop Factor - Plant Disease Doctor",
+    layout="centered",
+    page_icon="🌱",
+)
 
-# --- CONFIGURE GEMINI API KEY ---
-API_KEY = "AQ.Ab8RN6K2D-zzfN9b_HuMfsuBkJ-wDTiPZlDJnkZzVoMXTZm8yw"
-genai.configure(api_key=API_KEY)
+st.title("🌱 Crop Factor: Plant Doctor")
+st.write(
+    "Upload or snap a photo of any crop leaf to detect diseases and get"
+    " actionable remedies."
+)
 
-st.title("🌾 Crop Factor")
-st.write("Upload or take a photo of any crop leaf for an automated clinical pathology and prescription report.")
+# Robust Multi-source Key Retrieval
+API_KEY = "AQ.Ab8RN6KLCajoNbliDmCrwqDlt8ZdXdpqU5-5936shd4ZL471aQ"
+try:
+  if "GEMINI_API_KEY" in st.secrets:
+    API_KEY = st.secrets["GEMINI_API_KEY"]
+except Exception:
+  pass
 
-mode = st.radio("Choose photo method:", ["📁 Upload Image", "📷 Take Photo"], horizontal=True)
+if not API_KEY:
+  API_KEY = os.environ.get(
+      "GEMINI_API_KEY", "AQ.Ab8RN6KLCajoNbliDmCrwqDlt8ZdXdpqU5-5936shd4ZL471aQ"
+  )
 
-source = None
-if mode == "📁 Upload Image":
-    source = st.file_uploader("Upload plant picture", type=["jpg", "jpeg", "png"])
+client = genai.Client(api_key=API_KEY)
+
+# Flexible image capture for Mobile & Laptop
+option = st.radio(
+    "Choose Input Method:",
+    ("📁 Upload Leaf Image", "📷 Live Camera Capture"),
+    horizontal=True,
+)
+image_file = None
+
+if option == "📁 Upload Leaf Image":
+  image_file = st.file_uploader(
+      "Choose a leaf photo...", type=["jpg", "jpeg", "png", "webp"]
+  )
 else:
-    source = st.camera_input("Take a photo of the plant leaf")
+  image_file = st.camera_input("Capture leaf via camera")
 
-if source is not None:
-    img = Image.open(source).convert("RGB")
-    st.image(img, caption="Uploaded Foliage", use_container_width=True)
+if image_file is not None:
+  img = Image.open(image_file)
+  st.image(img, caption="Target Crop Leaf", use_container_width=True)
 
-    with st.spinner("Analyzing pathology and structuring clinical report..."):
-        prompt = """
-        You are an expert plant pathologist and agronomist.
-        Inspect this crop foliage and return strictly valid JSON conforming to this exact schema:
-        {
-          "is_plant": true or false,
-          "crop_name": "Common Name (Botanical Name)",
-          "is_healthy": true or false,
-          "disease_name": "Pathogen and Disease Name (or 'None' if healthy)",
-          "confidence_score": "High / Moderate / Low (with concise percentage like 92%)",
-          "symptoms": "Clear visual symptoms observed on leaf blade, margins, or veins",
-          "treatment": "Direct action steps and immediate measures to arrest active disease spread",
-          "prevention": "Cultural practices, pruning, sanitization, and long-term preventive measures",
-          "pesticide_advice": "Recommended chemical active ingredients, formulation (WP/EC), and exact dilution dosage per liter of water"
-        }
-        Output only clean, raw JSON. Do not enclose in markdown code fences.
-        """
+  if st.button(
+      "🔍 Diagnose Crop Health", type="primary", use_container_width=True
+  ):
+    with st.spinner("Analyzing plant pathology and generating treatment..."):
+      # Structured botanical & agronomic prompt
+      prompt = (
+          "You are a senior agricultural extension specialist and crop"
+          " pathologist.\n"
+          "Examine the provided plant image carefully and output the"
+          " evaluation using the following structure:\n\n"
+          "### 1. 🌾 Crop Identification\n"
+          "- **Crop / Plant Name:** [Common name and botanical name]\n\n"
+          "### 2. 🩺 Health Status\n"
+          "- **Condition:** [State clearly: 'HEALTHY' or 'DISEASED']\n"
+          "- **Confidence Assessment:** [High / Moderate / Low]\n\n"
+          "### 3. 🔬 Disease Diagnosis (If Diseased)\n"
+          "- **Disease / Pest Name:** [Exact pathology name, or 'None - plant is"
+          " healthy']\n"
+          "- **Severity Level:** [Mild / Moderate / Severe]\n"
+          "- **Observed Symptoms:** [Detail discoloration, chlorosis, fungal"
+          " pustules, necrosis, or pest bites]\n\n"
+          "### 4. 💊 Chemical & Pesticide Recommendations\n"
+          "- **Recommended Pesticide / Fungicide:** [Specific chemical active"
+          " ingredients, e.g., Mancozeb, Chlorpyrifos, Carbendazim, Copper"
+          " Oxychloride, Azoxystrobin]\n"
+          "- **Dosage & Application:** [Standard dilution in ml/g per liter of"
+          " water and spraying interval]\n\n"
+          "### 5. 🌿 Organic / Natural Recovery Methods\n"
+          "- **Organic Spray:** [Neem kernel extract / neem oil, bio-control"
+          " agents like Trichoderma viride or Pseudomonas fluorescens]\n"
+          "- **Cultural Practices:** [Soil drainage, pruning diseased leaves,"
+          " balanced NPK fertilization]\n\n"
+          "### 6. 🛡️ Preventive Action for Farmers\n"
+          "- [Crop rotation, seed treatment, and resistant variety"
+          " recommendations]\n\n"
+          "If the image is not a plant or leaf, state clearly that a plant leaf"
+          " photo is required."
+      )
 
-        model = genai.GenerativeModel(
-            model_name="gemini-3.8-flash",
-            generation_config={"temperature": 0.1}
-        )
+      # Resilient multi-model sequence: starts with official dynamic alias
+      models_to_try = [
+          "gemini-flash-latest",
+          "gemini-3.8-flash",
+          "gemini-3.5-flash",
+          "gemini-3-flash",
+      ]
+      result_text = None
+      error_log = []
 
-        response_text = None
-        for _ in range(3):
-            try:
-                response = model.generate_content([prompt, img])
-                response_text = response.text.strip()
-                break
-            except Exception as e:
-                if "429" in str(e):
-                    time.sleep(15)
-                else:
-                    st.error(f"Error: {e}")
-                    break
+      for model in models_to_try:
+        try:
+          response = client.models.generate_content(
+              model=model, contents=[img, prompt]
+          )
+          if response and response.text:
+            result_text = response.text
+            break
+        except Exception as err:
+          error_log.append(f"{model}: {str(err)}")
+          time.sleep(1.0)  # Brief pause before fallback attempt
 
-        if response_text:
-            try:
-                clean_text = response_text
-                if clean_text.startswith("```json"):
-                    clean_text = clean_text[7:]
-                elif clean_text.startswith("```"):
-                    clean_text = clean_text[3:]
-                if clean_text.endswith("```"):
-                    clean_text = clean_text[:-3]
-                clean_text = clean_text.strip()
-
-                data = json.loads(clean_text)
-
-                st.divider()
-
-                if not data.get("is_plant", False):
-                    st.warning("⚠️ The uploaded image does not appear to be plant foliage. Please upload a clear leaf picture.")
-                else:
-                    # 1. Crop Name
-                    st.markdown(f"## 🌾 Crop Name: **{data.get('crop_name', 'Unknown')}**")
-
-                    if data.get("is_healthy", False):
-                        st.success("✅ **Status: HEALTHY**")
-                        st.info("The foliage exhibits clean tissue with no visible lesions. Maintain standard agronomic nutrition and watering.")
-                    else:
-                        # 2. Disease Name
-                        st.error(f"### 🦠 Disease Name: **{data.get('disease_name', 'Undetermined Pathogen')}**")
-
-                        # 3. Confidence Score
-                        confidence = data.get("confidence_score", "Moderate")
-                        st.metric(label="🎯 Confidence Score", value=confidence)
-
-                        st.markdown("---")
-
-                        # 4. Symptoms
-                        st.subheader("🔍 Observed Symptoms")
-                        st.info(data.get("symptoms", "No symptoms described."))
-
-                        # 5. Treatment
-                        st.subheader("💊 Treatment (Immediate Remediation)")
-                        st.warning(data.get("treatment", "No immediate treatment specified."))
-
-                        # 6. Prevention
-                        st.subheader("🛡️ Prevention & Cultural Practices")
-                        st.success(data.get("prevention", "No preventive measures specified."))
-
-                        # 7. Pesticide Advice
-                        st.subheader("🧪 Pesticide Advice (Dosage & Formulation)")
-                        pesticide = data.get("pesticide_advice", "None required.")
-                        st.markdown(
-                            f"""
-                            <div style="background-color: #2b1d0c; padding: 15px; border-left: 5px solid #ff9800; border-radius: 4px;">
-                                <strong style="color: #ffb74d;">Chemical Prescription & Dilution:</strong><br>
-                                <span style="color: #ffffff;">{pesticide}</span>
-                            </div>
-                            """,
-                            unsafe_allow_html=True
-                        )
-
-            except Exception as parse_err:
-                st.error(f"Failed to process diagnosis: {parse_err}")
+      if result_text:
+        st.success("✅ Diagnosis Complete!")
+        st.markdown(result_text)
+      else:
+        st.error("Diagnostic service temporarily unavailable. Please retry.")
+        with st.expander("Diagnostic details"):
+          st.write(error_log)
