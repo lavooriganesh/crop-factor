@@ -29,26 +29,31 @@ with st.sidebar:
       " treatments."
   )
 
-st.title("🌱 Crop Factor:  Plant Doctor")
+st.title("🌱 Crop Factor: Plant Doctor")
 st.write(
     "Upload or snap a photo of any crop leaf to detect diseases and get"
     " actionable remedies."
 )
 
-# Robust Key Retrieval
-API_KEY = "AQ.Ab8RN6KLCajoNbliDmCrwqDlt8ZdXdpqU5-5936shd4ZL471aQ"
+# Secure Key Retrieval without hardcoding secrets in Git
+api_key = None
 try:
   if "GEMINI_API_KEY" in st.secrets:
-    API_KEY = st.secrets["GEMINI_API_KEY"]
+    api_key = st.secrets["GEMINI_API_KEY"]
 except Exception:
   pass
 
-if not API_KEY:
-  API_KEY = os.environ.get(
-      "GEMINI_API_KEY", "AQ.Ab8RN6KLCajoNbliDmCrwqDlt8ZdXdpqU5-5936shd4ZL471aQ"
-  )
+if not api_key:
+  api_key = os.environ.get("GEMINI_API_KEY", "")
 
-client = genai.Client(api_key=API_KEY)
+if not api_key:
+  st.error(
+      "Missing GEMINI_API_KEY! Please configure it in .streamlit/secrets.toml or"
+      " Streamlit Cloud Secrets."
+  )
+  st.stop()
+
+client = genai.Client(api_key=api_key)
 
 # Flexible image capture for Mobile & Laptop
 option = st.radio(
@@ -136,7 +141,7 @@ if image_file is not None:
         with st.expander("Diagnostic details"):
           st.write(error_log)
 
-# Elegant Bottom Corner Footer
+# Bottom Corner Footer
 st.markdown("---")
 st.markdown(
     """
