@@ -1,7 +1,10 @@
+import base64
+import io
 import os
 import time
 from google import genai
 from PIL import Image
+import requests
 import streamlit as st
 
 st.set_page_config(
@@ -70,7 +73,7 @@ if image_file is not None:
   ):
     if not api_key:
       st.error(
-          "API Key missing. Please ensure GEMINI_API_KEY is configured in"
+          "API Key missing. Please make sure GEMINI_API_KEY is configured in"
           " Streamlit Secrets."
       )
     else:
@@ -109,50 +112,66 @@ if image_file is not None:
         )
 
         result_text = None
-        models_to_try = [
-            "gemini-2.5-flash",
-            "gemini-2.0-flash",
-            "gemini-1.5-flash",
-        ]
+        error_logs = []
 
-        # Multi-engine fallback: Vertex AI mode (for Google Cloud bound keys) & Standard mode
-        client_configs = [
-            {
-                "vertexai": True,
-                "api_key": api_key,
-                "project": "crop-doctor-512410",
-                "location": "us-central1",
-            },
-            {"vertexai": True, "api_key": api_key},
-            {"api_key": api_key},
-        ]
+        # Strategy 1: Direct Vertex AI REST Endpoint
+        buffered = io.BytesIO()
+        img.save(buffered, format="JPEG", quality=85)
+        img_b64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
 
-        for config in client_configs:
-          try:
-            client = genai.Client(**config)
-            for model_name in models_to_try:
-              try:
-                response = client.models.generate_content(
-                    model=model_name, contents=[img, prompt]
-                )
-                if response and response.text:
-                  result_text = response.text
-                  break
-              except Exception:
-                time.sleep(0.5)
-            if result_text:
-              break
-          except Exception:
-            continue
+        payload = {
+            "contents": [{
+                "role": "user",
+                "parts": [
+                    {"text": prompt},
+                    {
+                        "inline_data": {
+                            "mime_type": "image/jpeg",
+                            "data": img_b64,
+                        }
+                    },
+                ],
+            }]
+        }
+
+        vertex_url = f"https://aiplatform.googleapis.com/v1beta1/projects/crop-doctor-512410/locations/us-central1/publishers/google/models/gemini-2.0-flash:generateContent?key={api_key}"
+        try:
+          resp = requests.post(
+              vertex_url,
+              json=payload,
+              headers={"Content-Type": "application/json"},
+              timeout=25,
+          )
+          if resp.status_code == 200:
+            data = resp.json()
+            result_text = data["candidates"][0]["content"]["parts"][0]["text"]
+          else:
+            error_logs.append(f"Vertex REST ({resp.status_code}): {resp.text}")
+        except Exception as e:
+          error_logs.append(f"Vertex REST exception: {str(e)}")
+
+        # Strategy 2: Google GenAI Client
+        if not result_text:
+          for model_name in ["gemini-2.5-flash", "gemini-2.0-flash"]:
+            try:
+              client = genai.Client(api_key=api_key)
+              response = client.models.generate_content(
+                  model=model_name, contents=[img, prompt]
+              )
+              if response and response.text:
+                result_text = response.text
+                break
+            except Exception as e:
+              error_logs.append(f"SDK ({model_name}): {str(e)}")
+              time.sleep(0.5)
 
         if result_text:
           st.success("✅ Diagnosis Complete!")
           st.markdown(result_text)
         else:
-          st.warning(
-              "System is busy processing requests. Please tap 'Diagnose Crop"
-              " Health' once more."
-          )
+          st.error("Diagnostic failure details:")
+          for err in error_logs:
+            st.code(err)
 
 # Bottom corner branding
 st.markdown("---")
