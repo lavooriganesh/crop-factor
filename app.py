@@ -1,8 +1,11 @@
 
+
 import os
+import time
 import streamlit as st
 from PIL import Image
 from google import genai
+from google.genai import errors
 
 st.set_page_config(
     page_title="Crop Factor - Plant Disease Doctor",
@@ -10,7 +13,7 @@ st.set_page_config(
     page_icon="🌱",
 )
 
-# Sidebar Developer Card
+# Sidebar
 with st.sidebar:
     st.markdown("### 👨‍💻 Project Developer")
     st.markdown(
@@ -30,8 +33,8 @@ with st.sidebar:
     st.markdown("---")
     st.markdown(
         "**About this App:**\n\n"
-        "Identify crops, examine leaf photos, and get "
-        "disease diagnosis and treatment guidance."
+        "Identify crops, examine leaf photos, and get disease "
+        "diagnosis and treatment guidance."
     )
 
 st.title("🌱 Crop Factor: Plant Disease Doctor")
@@ -40,7 +43,7 @@ st.write(
     "and receive possible remedies."
 )
 
-# Read API key from Streamlit Secrets or environment
+# Read API key
 api_key = ""
 
 try:
@@ -91,14 +94,14 @@ You are an agricultural crop disease assistant.
 
 Examine the provided image carefully.
 
-If the image is not a plant leaf, explain that the user
-must upload a valid crop leaf image.
+If it is not a plant leaf, explain that a valid crop leaf
+photo is required.
 
-If it is a leaf, provide the following report:
+If it is a leaf, provide this report in simple language:
 
 ### 1. Crop Identification
 - Common crop name
-- Botanical name if identifiable
+- Botanical name, if identifiable
 - Plant part examined
 
 ### 2. Health Status
@@ -109,18 +112,18 @@ If it is a leaf, provide the following report:
 - Possible disease or pest
 - Severity: Mild, Moderate, Severe, or Uncertain
 - Visible symptoms
-- Explain when the image is not clear enough to confirm.
+- Mention uncertainty if the image is unclear.
 
 ### 4. Treatment Guidance
-- Possible control methods
-- Suitable chemical treatment, if appropriate
-- Explain that pesticide choice and dosage must follow
-  the product label and local agricultural guidance.
-- Do not invent exact dosages if they cannot be verified.
-- Mention safety precautions and pre-harvest restrictions.
+- Appropriate disease management options
+- Chemical treatment, if suitable
+- Follow the product label and local agricultural advice
+  for pesticide dosage and application.
+- Do not invent unverified dosages.
+- Include relevant safety precautions.
 
 ### 5. Organic and Natural Management
-- Suitable options, where appropriate
+- Suitable organic options
 - Removal of infected plant material
 - Irrigation and field management suggestions
 
@@ -128,44 +131,59 @@ If it is a leaf, provide the following report:
 - Crop rotation
 - Resistant varieties
 - Field sanitation
-- Monitoring and other relevant practices
+- Regular crop monitoring
 
-### 7. Confidence and Next Steps
-- State what cannot be confirmed from the image alone.
-- Recommend consulting a local agricultural officer
-  if the diagnosis is uncertain or the damage is severe.
-
-Use simple language that farmers can understand.
-Do not claim a disease is confirmed from an unclear image.
+### 7. Next Steps
+- Explain what cannot be confirmed from the image alone.
+- Recommend a local agricultural expert if the diagnosis
+  is uncertain or the damage is severe.
 """
 
-                try:
-                    with st.spinner(
-                        "Examining the leaf and preparing recommendations..."
-                    ):
-                        client = genai.Client(api_key=api_key)
+                client = genai.Client(api_key=api_key)
 
-                        response = client.models.generate_content(
-                            model="gemini-3.8-flash",
-                            contents=[prompt, img],
-                        )
+                # Retry temporary server errors
+                result_text = None
+                last_error = None
 
-                    if response and response.text:
-                        st.success("✅ Diagnosis Complete!")
-                        st.markdown(response.text)
-                    else:
-                        st.warning(
-                            "No diagnosis was returned. "
-                            "Please try a clearer leaf photo."
-                        )
+                with st.spinner(
+                    "Analyzing the leaf. Please wait..."
+                ):
+                    for attempt in range(3):
+                        try:
+                            response = client.models.generate_content(
+                                model="gemini-3.8-flash",
+                                contents=[prompt, img],
+                            )
 
-                except Exception as e:
+                            if response and response.text:
+                                result_text = response.text
+                                break
+
+                            last_error = "The model returned no text."
+                            break
+
+                        except errors.ServerError as e:
+                            last_error = str(e)
+
+                            if "503" not in str(e) or attempt == 2:
+                                break
+
+                            time.sleep(2 ** (attempt + 1))
+
+                        except Exception as e:
+                            last_error = str(e)
+                            break
+
+                if result_text:
+                    st.success("✅ Diagnosis Complete!")
+                    st.markdown(result_text)
+                else:
                     st.error(
-                        "Diagnosis failed. Check your API key, "
-                        "model availability, internet connection, "
-                        "or API usage limits."
+                        "Diagnosis could not be completed. "
+                        "Please try again later."
                     )
-                    st.code(str(e))
+                    if last_error:
+                        st.code(last_error)
 
     except Exception:
         st.error(
