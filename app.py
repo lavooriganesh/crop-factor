@@ -146,7 +146,7 @@ Do not claim a disease is confirmed from an unclear image.
                         client = genai.Client(api_key=api_key)
 
                         response = client.models.generate_content(
-                            model="gemini-2.5-flash",
+                            model="gemini-3.8-flash",
                             contents=[prompt, img],
                         )
 
