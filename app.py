@@ -17,25 +17,25 @@ with st.sidebar:
       """
     <div style="background-color: #f0fdf4; border-left: 4px solid #16a34a; padding: 12px; border-radius: 6px;">
         <p style="margin: 0; color: #15803d; font-weight: bold; font-size: 15px;">Developed by Ganesh</p>
-        <p style="margin: 4px 0 0 0; color: #4b5563; font-size: 13px;">AI Agronomy & Smart Crop Protection</p>
+        <p style="margin: 4px 0 0 0; color: #4b5563; font-size: 13px;">Agronomy & Smart Crop Protection System</p>
     </div>
     """,
       unsafe_allow_html=True,
   )
   st.markdown("---")
   st.markdown(
-      "**About this App:**\nUses advanced AI computer vision to identify"
-      " crops, detect diseases, and recommend effective chemical & organic"
-      " treatments."
+      "**About this App:**\nAdvanced plant pathology system to identify crops,"
+      " detect diseases from leaf symptoms, and recommend targeted chemical &"
+      " organic treatments."
   )
 
-st.title("🌱 Crop Factor: Plant Doctor")
+st.title("🌱 Crop Factor: Plant Disease Doctor")
 st.write(
-    "Upload or snap a photo of any crop leaf to detect diseases and get"
+    "Upload or snap a photo of any crop leaf to identify diseases and get"
     " actionable remedies."
 )
 
-# Secure Key Retrieval without hardcoding secrets in Git
+# Secure Key Retrieval
 api_key = None
 try:
   if "GEMINI_API_KEY" in st.secrets:
@@ -137,9 +137,10 @@ if image_file is not None:
         st.success("✅ Diagnosis Complete!")
         st.markdown(result_text)
       else:
-        st.error("Diagnostic service temporarily unavailable. Please retry.")
-        with st.expander("Diagnostic details"):
-          st.write(error_log)
+        st.error(
+            "Diagnostic service temporarily busy. Please click 'Diagnose Crop"
+            " Health' again."
+        )
 
 # Bottom Corner Footer
 st.markdown("---")
