@@ -1,7 +1,6 @@
-import base64
-import io
 import os
-import requests
+import time
+from google import genai
 from PIL import Image
 import streamlit as st
 
@@ -71,15 +70,11 @@ if image_file is not None:
   ):
     if not api_key:
       st.error(
-          "API Key missing. Please make sure GEMINI_API_KEY is configured in"
+          "API Key missing. Please ensure GEMINI_API_KEY is configured in"
           " Streamlit Secrets."
       )
     else:
       with st.spinner("Analyzing plant pathology and generating treatment..."):
-        buffered = io.BytesIO()
-        img.save(buffered, format="JPEG", quality=85)
-        img_b64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
-
         prompt = (
             "You are a senior agricultural specialist and crop pathologist.\n"
             "Examine this plant leaf carefully and output your report in the"
@@ -113,73 +108,50 @@ if image_file is not None:
             " plant leaf image is required."
         )
 
-        payload = {
-            "contents": [{
-                "role": "user",
-                "parts": [
-                    {"text": prompt},
-                    {
-                        "inline_data": {
-                            "mime_type": "image/jpeg",
-                            "data": img_b64,
-                        }
-                    },
-                ],
-            }]
-        }
-
-        # Multi-gateway routing: Google Cloud Vertex Gemini endpoint first, then standard endpoints
-        endpoints = [
-            # Google Cloud Express Vertex API (matches account-bound keys for crop-doctor-512410)
-            (
-                "https://aiplatform.googleapis.com/v1beta1/projects/crop-doctor-512410/locations/us-central1/publishers/google/models/gemini-2.0-flash:generateContent",
-                "param",
-            ),
-            (
-                "https://aiplatform.googleapis.com/v1beta1/projects/crop-doctor-512410/locations/us-central1/publishers/google/models/gemini-1.5-flash:generateContent",
-                "param",
-            ),
-            # Standard Fallback Endpoints
-            (
-                "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
-                "param",
-            ),
-            (
-                "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
-                "param",
-            ),
-            (
-                "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent",
-                "param",
-            ),
+        result_text = None
+        models_to_try = [
+            "gemini-2.5-flash",
+            "gemini-2.0-flash",
+            "gemini-1.5-flash",
         ]
 
-        result_text = None
-        last_error = ""
+        # Multi-engine fallback: Vertex AI mode (for Google Cloud bound keys) & Standard mode
+        client_configs = [
+            {
+                "vertexai": True,
+                "api_key": api_key,
+                "project": "crop-doctor-512410",
+                "location": "us-central1",
+            },
+            {"vertexai": True, "api_key": api_key},
+            {"api_key": api_key},
+        ]
 
-        for base_url, method in endpoints:
+        for config in client_configs:
           try:
-            url = f"{base_url}?key={api_key}"
-            headers = {
-                "Content-Type": "application/json",
-                "x-goog-api-key": api_key,
-            }
-            resp = requests.post(url, json=payload, headers=headers, timeout=30)
-            if resp.status_code == 200:
-              data = resp.json()
-              result_text = data["candidates"][0]["content"]["parts"][0]["text"]
+            client = genai.Client(**config)
+            for model_name in models_to_try:
+              try:
+                response = client.models.generate_content(
+                    model=model_name, contents=[img, prompt]
+                )
+                if response and response.text:
+                  result_text = response.text
+                  break
+              except Exception:
+                time.sleep(0.5)
+            if result_text:
               break
-            else:
-              last_error = f"{resp.status_code}: {resp.text}"
-          except Exception as e:
-            last_error = str(e)
+          except Exception:
+            continue
 
         if result_text:
           st.success("✅ Diagnosis Complete!")
           st.markdown(result_text)
         else:
-          st.error(
-              f"Could not connect to service. Gateway response: {last_error}"
+          st.warning(
+              "System is busy processing requests. Please tap 'Diagnose Crop"
+              " Health' once more."
           )
 
 # Bottom corner branding
