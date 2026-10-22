@@ -10,13 +10,32 @@ st.set_page_config(
     page_icon="🌱",
 )
 
-st.title("🌱 Crop Factor: Plant Doctor")
+# Professional Developer Badge in the Sidebar
+with st.sidebar:
+  st.markdown("### 👨‍💻 Project Developer")
+  st.markdown(
+      """
+    <div style="background-color: #f0fdf4; border-left: 4px solid #16a34a; padding: 12px; border-radius: 6px;">
+        <p style="margin: 0; color: #15803d; font-weight: bold; font-size: 15px;">Developed by Ganesh</p>
+        <p style="margin: 4px 0 0 0; color: #4b5563; font-size: 13px;">AI Agronomy & Smart Crop Protection</p>
+    </div>
+    """,
+      unsafe_allow_html=True,
+  )
+  st.markdown("---")
+  st.markdown(
+      "**About this App:**\nUses advanced AI computer vision to identify"
+      " crops, detect diseases, and recommend effective chemical & organic"
+      " treatments."
+  )
+
+st.title("🌱 Crop Factor:  Plant Doctor")
 st.write(
     "Upload or snap a photo of any crop leaf to detect diseases and get"
     " actionable remedies."
 )
 
-# Robust Multi-source Key Retrieval
+# Robust Key Retrieval
 API_KEY = "AQ.Ab8RN6KLCajoNbliDmCrwqDlt8ZdXdpqU5-5936shd4ZL471aQ"
 try:
   if "GEMINI_API_KEY" in st.secrets:
@@ -54,7 +73,6 @@ if image_file is not None:
       "🔍 Diagnose Crop Health", type="primary", use_container_width=True
   ):
     with st.spinner("Analyzing plant pathology and generating treatment..."):
-      # Structured botanical & agronomic prompt
       prompt = (
           "You are a senior agricultural extension specialist and crop"
           " pathologist.\n"
@@ -89,7 +107,6 @@ if image_file is not None:
           " photo is required."
       )
 
-      # Resilient multi-model sequence: starts with official dynamic alias
       models_to_try = [
           "gemini-flash-latest",
           "gemini-3.8-flash",
@@ -109,7 +126,7 @@ if image_file is not None:
             break
         except Exception as err:
           error_log.append(f"{model}: {str(err)}")
-          time.sleep(1.0)  # Brief pause before fallback attempt
+          time.sleep(1.0)
 
       if result_text:
         st.success("✅ Diagnosis Complete!")
@@ -118,3 +135,14 @@ if image_file is not None:
         st.error("Diagnostic service temporarily unavailable. Please retry.")
         with st.expander("Diagnostic details"):
           st.write(error_log)
+
+# Elegant Bottom Corner Footer
+st.markdown("---")
+st.markdown(
+    """
+    <div style="text-align: right; color: #6b7280; font-size: 13px; padding-top: 10px;">
+        Designed & Developed with ❤️ by <b>Ganesh</b>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
